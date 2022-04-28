@@ -1,4 +1,5 @@
 // action login
+// add is_login_form:xxx on additional settings
 add_action( 'wpcf7_before_send_mail', function( $contact_form, &$abort, $submission ){
 	if ( ! $contact_form->additional_setting( 'is_login_form' ) ) {
 		return;
@@ -20,3 +21,13 @@ add_action( 'wpcf7_before_send_mail', function( $contact_form, &$abort, $submiss
 		$abort = true;
 	}
 }, 10, 3 );
+
+// get content from post_id
+// add post_id:xxx on additional settings
+add_filter( "wpcf7_contact_form_properties", function ( $properties, $contact_form ) {
+	if ( $post_id = $contact_form->additional_setting( 'post_id' ) ) {
+		$properties['form'] = do_shortcode( get_post_field( 'post_content', $post_id[0] ) );
+	}
+	
+	return $properties;
+}, 10, 2 );
