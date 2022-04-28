@@ -1,0 +1,151 @@
+// --------------------------------------------------------------------
+// redirect to /login page until login, then redirect to home page /
+add_action( 'template_redirect', function(){	
+	if( current_user_can('edit_others_pages') ) {
+		return;
+	}
+	
+	if ( ! is_user_logged_in() && ! is_page( array( 'login', 'lost-password' ) ) ) {
+		wp_redirect( home_url( '/login' ) );
+		
+		exit;
+	} elseif ( is_user_logged_in() && is_page( array( 'login', 'lost-password' ) ) ) {
+		wp_redirect( home_url() );
+		
+		exit;
+	}
+} );
+
+add_action( 'init', function(){
+	if( current_user_can('edit_others_pages') ) {
+		return;
+	}
+	
+	// WP tracks the current page - global the variable to access it
+	global $pagenow;
+	
+	// Check if a $_GET['action'] is set, and if so, load it into $action variable
+	$action = ( isset( $_GET['action'] ) ) ? $_GET['action'] : '';
+	
+	// Check if we're on the login page, and ensure the action is not 'logout'
+	if( $pagenow == 'wp-login.php' && 
+		( ! $action || ( $action && ! in_array( $action, array( 'logout', 'lostpassword', 'rp', 'resetpass' ) ) ) ) ) {		
+		// Redirect to the home page
+		wp_redirect( get_bloginfo( 'url' ) );
+		
+		// Stop execution to prevent the page loading for any reason
+		exit();
+	}	
+} );
+
+add_filter( 'login_redirect', function(){
+	return home_url();
+} );
+
+// --------------------------------------------------------------------
+// add function on admin area
+if ( is_admin() || $GLOBALS['pagenow'] === 'wp-login.php' ) {
+	include_once( 'functions-admin.php' );
+}
+
+// --------------------------------------------------------------------
+// navigation buttons on edit admin pages
+add_action( 'add_meta_boxes', function(){
+	$post_types = get_post_types( array( 'public' => true, '_builtin' => false,), 'names', 'and' );
+	$post_types['post'] = 'post';
+	$post_types['page'] = 'page';
+	
+	add_meta_box(
+		'rt_mb_post_navigation',
+		__( 'Post navigation', 'textdomain' ),
+		function(){
+
+global $post, $wpdb;
+
+$where = "WHERE post_type = '{$post->post_type}' AND post_status IN ('publish','future','draft','pending','private') ";
+
+?>
+
+<script>
+jQuery(document).ready(function($){
+$("#current-post-selector").on('keydown', function (e) {
+    if (e.key === 'Enter' || e.keyCode === 13) {
+        e.preventDefault();
+				
+		$('<form>', {
+			"html": 
+				'<input type="hidden" name="_wpnonce" value="<?php echo wp_create_nonce( "rt_mb_post_navigation" ); ?>">' +
+				'<input type="hidden" name="rt_mb_post_type" value="<?php echo $post->post_type; ?>">' +
+				'<input type="hidden" name="post_position" value="' + this.value + '">',
+			"method": 'post',
+			"action": window.siteRoot
+		}).appendTo(document.body).submit();
+		
+    }
+});
+});
+</script>
+
+<div style="text-align:center;">
+<span>
+
+<?php
+
+$post_position = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}posts {$where} AND ID < '{$post->ID}' ORDER BY ID DESC" ) + 1;
+$total_posts = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}posts {$where}" );
+	
+$next_post = $wpdb->get_var( "SELECT ID FROM {$wpdb->prefix}posts {$where} AND ID > {$post->ID} ORDER BY ID ASC LIMIT 1" );
+if ( $next_post ) :
+	$first_post = $wpdb->get_var( "SELECT MAX(ID) FROM {$wpdb->prefix}posts {$where}" );
+
+?>
+
+&nbsp;<a class="first-page button" href="<?php echo admin_url( "post.php?action=edit&post={$first_post}" ); ?>"><span class="screen-reader-text"><?php echo  get_the_title( $first_post ); ?></span><span aria-hidden="true">«</span></a>
+
+<a class="prev-page button" href="<?php echo admin_url( "post.php?action=edit&post={$next_post}" ); ?>"><span class="screen-reader-text"><?php echo  get_the_title( $next_post ); ?></span><span aria-hidden="true">‹</span></a>
+
+<?php else: ?>
+
+<span class="tablenav-pages-navspan button disabled" aria-hidden="true">«</span>
+<span class="tablenav-pages-navspan button disabled" aria-hidden="true">‹</span>
+
+<?php endif; ?>
+
+<span>
+	<label for="current-page-selector" class="screen-reader-text">Registro actual</label>
+	<input class="current-page" id="current-post-selector" type="text" name="post_position" value="<?php echo $post_position; ?>" size="1" aria-describedby="table-paging">
+	<span class="tablenav-paging-text" style="vertical-align:middle;"><?php echo __( "of" ); ?>
+		<span class="total-pages"> <?php echo $total_posts; ?></span>
+	</span>
+</span>
+
+<?php 
+
+$prev_post = $wpdb->get_var( "SELECT ID FROM {$wpdb->prefix}posts {$where} AND ID < '{$post->ID}' ORDER BY ID DESC LIMIT 1" );
+if ( $prev_post ) :
+	$last_post = $wpdb->get_var( "SELECT MIN(ID) FROM {$wpdb->prefix}posts {$where}" );
+?>
+
+<a class="next-page button" href="<?php echo admin_url( "post.php?action=edit&post={$prev_post}" ); ?>"><span class="screen-reader-text"><?php echo  get_the_title( $prev_post ); ?></span><span aria-hidden="true">›</span></a>
+	
+<a class="last-page button" href="<?php echo admin_url( "post.php?action=edit&post={$last_post}" ); ?>"><span class="screen-reader-text">' . get_the_title( $last_post ); ?></span><span aria-hidden="true">»</span></a>
+
+<?php else: ?>
+
+<span class="tablenav-pages-navspan button disabled" aria-hidden="true">›</span>
+<span class="tablenav-pages-navspan button disabled" aria-hidden="true">»</span>
+
+<?php endif; ?>
+
+</span>
+
+</div>
+
+<?php
+
+		},
+		$post_types,
+		'side',
+		'high'
+	);
+} );
