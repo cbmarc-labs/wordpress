@@ -1,0 +1,22 @@
+// action login
+add_action( 'wpcf7_before_send_mail', function( $contact_form, &$abort, $submission ){
+	if ( ! $contact_form->additional_setting( 'is_login_form' ) ) {
+		return;
+	}
+	
+	$form_id = $contact_form->id();
+	$submission = WPCF7_Submission::get_instance() ;
+	$wpcf = WPCF7_ContactForm::get_current() ;
+	
+	$posted_data = $submission->get_posted_data();
+	
+	add_filter( 'wpcf7_skip_mail', function( $skip_mail, $contact_form ){ return true; }, 10, 2 );
+	
+	$user = wp_signon( $posted_data, false );
+	$submission->set_response( "Login succesful." );
+	if ( is_wp_error( $user ) ) {
+		$submission->set_status( 'validation_failed' );
+		$submission->set_response( strip_tags( $user->get_error_message() ) );
+		$abort = true;
+	}
+}, 10, 3 );
